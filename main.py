@@ -11,8 +11,8 @@ dp = Dispatcher(storage=MemoryStorage())
 
 
 async def main():
-    dp.include_router(admin)
     dp.include_router(client)
+    dp.include_router(admin)
     dp.include_router(other)
     await dp.start_polling(bot)
 

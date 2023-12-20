@@ -11,8 +11,10 @@ worksheet = sh.worksheet("Ссылки")
 async def main():
     while True:
         try:
+            #получение всех ссылок
             url_tuples = await get_url()
             index = 1
+            #заполнение таблицы
             for url_tuple in url_tuples:
                 url = url_tuple[0]
                 is_block = "yes" if url_tuple[1]==1 else "no"
@@ -44,6 +46,7 @@ async def main():
                     })
                 await asyncio.sleep(2.5)
                 index += 1
+            #если остались ячейки снизу, заполненный чем-то, то удаляем их
             val = worksheet.cell(index, 1).value
             while val != None:
                 worksheet.update_cell(index, 1, "")
