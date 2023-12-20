@@ -104,7 +104,7 @@ async def get_admin():
                 text_message += f" | {username}\n"
             if id_user == "":
                 id_user = username
-            inner_keyboard.append(InlineKeyboardButton(text=f'Удалить {username}', callback_data=f'deleteadmin{id_user}'))
+            inner_keyboard.append(InlineKeyboardButton(text=f'{index})Удалить {username if username!="" else fullname}', callback_data=f'deleteadmin{id_user}'))
             index += 1
             if len(inner_keyboard)>=2:
                 inline_keyboard.append(inner_keyboard)
