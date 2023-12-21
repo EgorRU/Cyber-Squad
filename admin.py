@@ -113,7 +113,7 @@ async def start(callback: CallbackQuery):
 async def start(callback: CallbackQuery, state: FSMContext):
     if await is_admin(callback.from_user.id, callback.from_user.username):
         keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Отмена', callback_data='Отмена')]])
-        await callback.message.edit_text("❗Напишите username пользователя для добавления", reply_markup=keyboard)
+        await callback.message.edit_text("❗Напишите @username пользователя для добавления", reply_markup=keyboard)
         await state.set_state(GetAdminId.id_user)
         await callback.answer("Если вы не собираетесь добавлять администратора, то нажмите обязательно на кнопку 'отмена'", show_alert=True)
     else:
@@ -271,7 +271,6 @@ async def start(callback: CallbackQuery):
         keyboard, message_text = await get_keyboard_and_message_text("swap")
         try:
             await callback.message.edit_text(f"❓У какой ссылки вы хотите изменить статус?\n\n❗Нажатие на кнопку - изменение статуса без подтверждения\n\n{message_text}", reply_markup=keyboard, disable_web_page_preview=True)
-            await callback.answer("Успешно отредактировано")
         except:
             pass
     else:

@@ -56,7 +56,7 @@ async def add_admin(username):
     if id_user_from_db != None:
         cur.execute("UPDATE data SET is_admin=? WHERE username=?",(1, username))
     else:
-        cur.execute("INSERT INTO data values (?,?,?,?)", ("", 1, "unknown", username))
+        cur.execute("INSERT INTO data(is_admin, fullname, username) values (?,?,?)", (1, "unknown", username))
     base.commit()
     base.close()
     return True
@@ -102,7 +102,7 @@ async def get_admin():
                 text_message += "\n"
             else:
                 text_message += f" | {username}\n"
-            if id_user == "":
+            if id_user == None:
                 id_user = username
             inner_keyboard.append(InlineKeyboardButton(text=f'{index})Удалить {username if username!="" else fullname}', callback_data=f'deleteadmin{id_user}'))
             index += 1
@@ -238,7 +238,7 @@ async def get_keyboard_and_message_text(message):
         else:
             inline_keyboard.append(inner_keyboard)
         if message != 'show':
-            inline_keyboard.append([InlineKeyboardButton(text='Назад', callback_data='Назад')])
+            inline_keyboard.append([InlineKeyboardButton(text='Назад', callback_data='Редактирование таблицы')])
         keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
         return keyboard, text_message
     else:
