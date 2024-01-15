@@ -1,256 +1,210 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import sqlite3
 from config import bot
 
 
-#проверка на админа
-async def is_admin(id_user, username):
+#получение списка всех пользователей
+async def get_list_users(Full_users=True):
     base = sqlite3.connect("database.db")
     cur = base.cursor()
-    base.execute("CREATE TABLE IF NOT EXISTS data(user_id integer, is_admin integer, fullname TEXT, username TEXT)")
+    base.execute("CREATE TABLE IF NOT EXISTS users(id_user integer PRIMARY KEY, fullname TEXT, username TEXT, count_ready_url integer, is_admin integer)")
     base.commit()
-    data = cur.execute(f"SELECT user_id FROM data WHERE user_id=? and is_admin=?",(id_user, 1)).fetchone()
-    if data != None:
-        return True
-    data = cur.execute(f"SELECT username FROM data WHERE username=? and is_admin=?",(username, 1)).fetchone()
+    #получаем список всех пользователей
+    if Full_users:
+        data = cur.execute("SELECT id_user FROM users").fetchall()
+    #получаем список только рядовых сотрудников
+    else:
+        data = cur.execute("SELECT id_user FROM users where is_admin=?", (0,)).fetchall()
     base.close()
+    #если пользователей нет, то возвращаем пустой список
+    if data == None:
+        return []
+    #иначе возвращаем список из id_user
+    else:
+        return [user[0] for user in data] #из бд возвращается список из кортежей
+
+
+#получение списка всех ссылок
+async def get_list_urls():
+    base = sqlite3.connect("database.db")
+    cur = base.cursor()
+    base.execute("CREATE TABLE IF NOT EXISTS urls(urlname TEXT PRIMARY KEY, url TEXT, count_ready integer)")
+    base.commit()
+    data = cur.execute("SELECT urlname FROM urls").fetchall()
+    base.close()
+    #если ссылок нет, то возвращаем пустой список
+    if data == None:
+        return []
+    #иначе возвращаем список urlname
+    else:
+        return [urlname[0] for urlname in data] #из бд возвращается список из кортежей
+
+
+#обновление всей бд
+async def update_db(id_user, fullname, username):
+    base = sqlite3.connect("database.db")
+    cur = base.cursor()
+    base.execute("CREATE TABLE IF NOT EXISTS users(id_user integer PRIMARY KEY, fullname TEXT, username TEXT, count_ready_url integer, is_admin integer)")
+    base.commit()
+    data = cur.execute("SELECT * FROM users WHERE id_user=?",(id_user,)).fetchone()
+    #если пользователя нет, то добавляем его и показываем ему все ссылки
+    if data == None:
+        #добавление пользователя в бд
+        cur.execute("INSERT INTO users values (?,?,?,?,?)", (id_user, fullname, username, 0, 0))
+        base.commit()
+        #получаем список всех url
+        list_urlname = await get_list_urls()
+        base.execute("CREATE TABLE IF NOT EXISTS users_urls(id_user integer, urlname TEXT, is_ready integer, PRIMARY KEY(id_user, urlname))")
+        base.commit()
+        #каждый url добавляем каждому пользователю
+        for urlname in list_urlname:
+            cur.execute("INSERT INTO users_urls values (?,?,?)", (id_user, urlname, 0))
+            base.commit()
+    #если пользователь есть, то обновляем его имя
+    else:
+        cur.execute("UPDATE users set fullname=?, username=? where id_user=?", (fullname, username, id_user))
+        base.commit()
+    base.close()
+    
+
+#проверка на админа
+async def is_admin(id_user):
+    base = sqlite3.connect("database.db")
+    cur = base.cursor()
+    base.execute("CREATE TABLE IF NOT EXISTS users(id_user integer PRIMARY KEY, fullname TEXT, username TEXT, count_ready_url integer, is_admin integer)")
+    base.commit()
+    data = cur.execute("SELECT id_user FROM users WHERE id_user=? and is_admin=?",(id_user, 1)).fetchone()
+    base.close()
+    #если нашли запись в бд => админ
     if data != None:
         return True
     return False
      
 
-#обновление id или username пользователя
-async def update_db(id_user, fullname, username):
+#количество необработанных ссылок для конкретного пользователя
+async def get_count_not_ready_urls_for_user(id_user):
     base = sqlite3.connect("database.db")
     cur = base.cursor()
-    base.execute("CREATE TABLE IF NOT EXISTS data(user_id integer, is_admin integer, fullname TEXT, username TEXT)")
+    base.execute("CREATE TABLE IF NOT EXISTS users_urls(id_user integer, name TEXT, is_ready integer, PRIMARY KEY(id_user, urlname))")
     base.commit()
-    data = cur.execute(f"SELECT * FROM data WHERE user_id=? or username=?",(id_user, username)).fetchone()
-    if data == None:
-        cur.execute("INSERT INTO data values (?,?,?,?)", (id_user, 0, fullname, username))
-    else:
-        cur.execute("UPDATE data set fullname=?, username=?, user_id=? where user_id=? or username=?", (fullname, username, id_user, id_user, username))
-    base.commit()
+    data = cur.execute("SELECT count(*) FROM users_urls where id_user=? and is_ready=?", (id_user, 0)).fetchone()
     base.close()
+    return data[0]
 
 
-#получить всех пользователей не админов для рассылки
-async def get_all_id_user():
+#количество обработанных ссылок для конкретного пользователя
+async def get_count_ready_urls_for_user(id_user):
     base = sqlite3.connect("database.db")
     cur = base.cursor()
-    base.execute("CREATE TABLE IF NOT EXISTS data(user_id integer, is_admin integer, fullname TEXT, username TEXT)")
+    base.execute("CREATE TABLE IF NOT EXISTS users_urls(id_user integer, urlname TEXT, is_ready integer, PRIMARY KEY(id_user, urlname))")
     base.commit()
-    data = cur.execute(f"SELECT user_id FROM data WHERE is_admin=?",(0,)).fetchall()
+    data = cur.execute("SELECT count(*) FROM users_urls where id_user=? and is_ready=?", (id_user, 1)).fetchone()
     base.close()
-    if data != None:
-        return [value[0] for value in data]
-    return []
-        
-
-async def add_admin(username):
-    base = sqlite3.connect("database.db")
-    cur = base.cursor()
-    base.execute("CREATE TABLE IF NOT EXISTS data(user_id integer, is_admin integer, fullname TEXT, username TEXT)")
-    base.commit()
-    id_user_from_db = cur.execute(f"SELECT username FROM data WHERE username=?", (username,)).fetchone()
-    if id_user_from_db != None:
-        cur.execute("UPDATE data SET is_admin=? WHERE username=?",(1, username))
-    else:
-        cur.execute("INSERT INTO data(is_admin, fullname, username) values (?,?,?)", (1, "unknown", username))
-    base.commit()
-    base.close()
-    return True
+    return data[0]
 
 
-async def delete_admin(user):
-    base = sqlite3.connect("database.db")
-    cur = base.cursor()
-    base.execute("CREATE TABLE IF NOT EXISTS data(user_id integer, is_admin integer, fullname TEXT, username TEXT)")
-    base.commit()
-    if user.isdigit():
-        id_user_from_db = cur.execute(f"SELECT user_id FROM data WHERE user_id=?", (int(user), )).fetchone()
-        if id_user_from_db != None:
-            cur.execute("UPDATE data SET is_admin=? WHERE user_id=?",(0, user))
-    else:
-        id_user_from_db = cur.execute(f"SELECT username FROM data WHERE username=?", (user[1:], )).fetchone()
-        if id_user_from_db != None:
-            cur.execute("UPDATE data SET is_admin=? WHERE username=?",(0, user[1:]))
-    base.commit()
-    base.close()
-    if id_user_from_db != None:
-        return True
-    return False
+#рассылка всем рядовым пользователям
+async def mailing():
+    list_users = await get_list_users(False) #False = не делаем рассылку администраторам
+    for user in list_users:
+        try:
+            await bot.send_message(user, "Появились новые ссылки")
+        except:
+            pass #пользователь добавил бота в чс
 
 
-#получить список всех админов
-async def get_admin():
-    base = sqlite3.connect("database.db")
-    cur = base.cursor()
-    base.execute("CREATE TABLE IF NOT EXISTS data(user_id integer, is_admin integer, fullname TEXT, username TEXT)")
-    base.commit()
-    all_id_admin = cur.execute(f"SELECT user_id, fullname, username FROM data WHERE is_admin=?", (1,)).fetchall()
-    if len(all_id_admin) > 0:
-        text_message = ""
-        index = 1
-        inner_keyboard = []
-        inline_keyboard = []
-        for admin in all_id_admin:
-            id_user, fullname, username = admin
-            username = f"@{username}" if username != None and username != "" else ""
-            text_message += f"{index}) ✅{fullname}"
-            if username == "":
-                text_message += "\n"
-            else:
-                text_message += f" | {username}\n"
-            if id_user == None:
-                id_user = username
-            inner_keyboard.append(InlineKeyboardButton(text=f'{index})Удалить {username if username!="" else fullname}', callback_data=f'deleteadmin{id_user}'))
-            index += 1
-            if len(inner_keyboard)>=2:
-                inline_keyboard.append(inner_keyboard)
-                inner_keyboard = []
-        else:
-            inline_keyboard.append(inner_keyboard)
-        inline_keyboard.append([InlineKeyboardButton(text='❗Добавить администратора', callback_data='Добавить админа')])
-        inline_keyboard.append([InlineKeyboardButton(text='Назад', callback_data='Назад')])
-        keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
-        return keyboard, text_message
-    else:
-        return None, "Нет администраторов"
-
-
+#добавление новой ссылки в базу данных
 async def set_new_url(new_url):
     base = sqlite3.connect("database.db")
     cur = base.cursor()
-    base.execute("CREATE TABLE IF NOT EXISTS urls(url PRIMARY KEY, block integer)")
+    base.execute("CREATE TABLE IF NOT EXISTS urls(urlname TEXT PRIMARY KEY, url TEXT, count_ready integer)")
     base.commit()
     data = cur.execute(f"SELECT url FROM urls WHERE url=?",(new_url,)).fetchone()
+    #если ссылка новая, то добавляем её
     if data == None:
-        cur.execute("INSERT INTO urls values (?,?)", (new_url, 0))
-    base.commit()
+        count_url = cur.execute("SELECT count(*) FROM urls").fetchone()
+        #номер следующей ссылки
+        next_number_for_url = int(count_url[0]) + 1 #из бд возвращается кортеж
+        cur.execute("INSERT INTO urls values (?,?,?)", (f"Ссылка №{next_number_for_url}", new_url, 0))
+        #получаем список всех пользователей
+        list_users = await get_list_users()
+        base.execute("CREATE TABLE IF NOT EXISTS users_urls(id_user integer, urlname TEXT, is_ready integer, PRIMARY KEY(id_user, urlname))")
+        base.commit()
+        #всем пользователям добавляем её как невыполненную
+        for user in list_users:
+            cur.execute("INSERT INTO users_urls values (?,?,?)", (user, f"Ссылка №{next_number_for_url}", 0))
+            base.commit()
     base.close()
+    #если ссылка новая
     if data == None:
         return True
     return False
         
 
-async def get_url():
+#получения списка необработанных ссылок для конкретного пользователя
+async def get_list_urls_in_work_for_user(id_user):
     base = sqlite3.connect("database.db")
     cur = base.cursor()
-    base.execute("CREATE TABLE IF NOT EXISTS urls(url PRIMARY KEY, block integer)")
+    base.execute("CREATE TABLE IF NOT EXISTS users_urls(id_user integer, urlname TEXT, is_ready integer, PRIMARY KEY(id_user, urlname))")
     base.commit()
-    data = cur.execute(f"SELECT url, block FROM urls").fetchall()
+    data = cur.execute("SELECT urlname FROM users_urls where id_user=? and is_ready=?", (id_user, 0)).fetchall()
     base.close()
+    #если ссылок нет, то возвращаем пустой список
     if data == None:
         return []
-    return data
-
-
-#изменить статус ссылки на заблокированный
-async def update_url(url):
-    base = sqlite3.connect("database.db")
-    cur = base.cursor()
-    base.execute("CREATE TABLE IF NOT EXISTS urls(url PRIMARY KEY, block integer)")
-    base.commit()
-    if len(url)<64:
-        data = cur.execute(f"SELECT block FROM urls where url=?", (url,)).fetchone()
-        if data != None:
-            cur.execute(f"UPDATE urls set block=? where url=?",(1, url))
-        base.commit()
-        base.close()
-        if data == None or data[0]==1:
-            return False
-        return True
+    #иначе возвращаем список urlname
     else:
-        data = cur.execute(f"SELECT block FROM urls where url like '%{url}%'").fetchone()
-        if data != None:
-            cur.execute(f"UPDATE urls set block=? where url like '%{url}%'",(1,))
-        base.commit()
-        base.close()
-        if data == None or data[0]==1:
-            return False
-        return True
-
-
-async def delete_url(url):
-    base = sqlite3.connect("database.db")
-    cur = base.cursor()
-    base.execute("CREATE TABLE IF NOT EXISTS urls(url PRIMARY KEY, block integer)")
-    base.commit()
-    data = cur.execute(f"SELECT * FROM urls where url=?", (url,)).fetchone()
-    if data != None:
-        cur.execute(f"DELETE from urls where url=?",(url,))
-    base.commit()
-    base.close()
-    if data == None or data[0]==1:
-        return False
-    return True
-
-
-async def edit_url(old_url, new_url):
-    base = sqlite3.connect("database.db")
-    cur = base.cursor()
-    base.execute("CREATE TABLE IF NOT EXISTS urls(url PRIMARY KEY, block integer)")
-    base.commit()
-    data = cur.execute(f"SELECT * FROM urls where url=?", (new_url,)).fetchone()
-    if data == None:
-        cur.execute(f"UPDATE urls set url=? where url=?", (new_url, old_url))
-    base.commit()
-    base.close()
-    return True
-
-
-async def swap_status_url(url):
-    base = sqlite3.connect("database.db")
-    cur = base.cursor()
-    base.execute("CREATE TABLE IF NOT EXISTS urls(url PRIMARY KEY, block integer)")
-    base.commit()
-    data = cur.execute(f"SELECT block FROM urls where url=?", (url,)).fetchone()
-    if data != None:
-        if data[0] == 1:
-            cur.execute(f"UPDATE urls set block=? where url=?",(0, url))
-        else:
-            cur.execute(f"UPDATE urls set block=? where url=?",(1, url))
-    base.commit()
-    base.close()
-
-
-#получить клавиатуру и текст сообщения для отправки
-#message - для callback, чтобы понимать, для чего вызвана клава - для просмотра, удаления, редактирования, длинна message 4 символа
-async def get_keyboard_and_message_text(message):
-    list_url = await get_url()
-    if len(list_url) > 0:
-        if len(list_url)>50:
-            list_url = list_url[-50:]
-        text_message = ""
-        index = 1
-        inner_keyboard = []
-        inline_keyboard = []
-        for tuple_url in list_url:
-            link = tuple_url[0]
-            string = "❌" if tuple_url[1]==0 else "✅"
-            text_message += f"{index}) {link} {string}\n"
-            inner_keyboard.append(InlineKeyboardButton(text=f'{index}{string}', callback_data=f'{message}{link if len(link)<60 else link[-60:]}'))
-            index += 1
-            if len(inner_keyboard)>4:
-                inline_keyboard.append(inner_keyboard)
-                inner_keyboard = []
-        else:
-            inline_keyboard.append(inner_keyboard)
-        if message != 'show':
-            inline_keyboard.append([InlineKeyboardButton(text='Назад', callback_data='Редактирование таблицы')])
-        keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
-        return keyboard, text_message
-    else:
-        return None, "Нет необработанных ссылок"
+        return [urlname[0] for urlname in data] #из бд возвращается список из кортежей
     
 
-#рассылка
-async def mailing():
-    all_id_user = await get_all_id_user()
-    keyboard, text_message = await get_keyboard_and_message_text("show")
-    for id_user in all_id_user:
-        try:
-            await bot.send_message(id_user, f"Появились новые ссылки:\n{text_message}", reply_markup=keyboard, disable_web_page_preview=True)
-        except:
-            pass
+#получения списка обработанных ссылок для конкретного пользователя
+async def get_list_ready_urls_for_user(id_user):
+    base = sqlite3.connect("database.db")
+    cur = base.cursor()
+    base.execute("CREATE TABLE IF NOT EXISTS users_urls(id_user integer, urlname TEXT, is_ready integer, PRIMARY KEY(id_user, urlname))")
+    base.commit()
+    data = cur.execute("SELECT urlname FROM users_urls where id_user=? and is_ready=?", (id_user, 1)).fetchall()
+    base.close()
+    #если ссылок нет, то возвращаем пустой список
+    if data == None:
+        return []
+    #иначе возвращаем список urlname
+    else:
+        return [urlname[0] for urlname in data] #из бд возвращается список из кортежей
+    
+
+#получение ссылки по её имени
+async def get_url_by_urlname(urlname):
+    base = sqlite3.connect("database.db")
+    cur = base.cursor()
+    base.execute("CREATE TABLE IF NOT EXISTS urls(urlname TEXT PRIMARY KEY, url TEXT, count_ready integer)")
+    base.commit()
+    data = cur.execute("SELECT url FROM urls where urlname=?", (urlname, )).fetchone()
+    base.close()
+    #если ссылки нет - возвращаем None
+    if data == None:
+        return None
+    #иначе url
+    else:
+        return data[0] #из бд возвращается список из кортежей
+    
+
+#изменение бд - ссылка обработана конкретным пользователем
+async def report_by_link(id_user, urlname):
+    base = sqlite3.connect("database.db")
+    cur = base.cursor()
+    cur.execute("UPDATE urls set count_ready=count_ready+1 where urlname=?", (urlname,))
+    base.commit()
+    cur.execute("UPDATE users set count_ready_url=count_ready_url+1 where id_user=?", (id_user,))
+    base.commit()
+    cur.execute("UPDATE users_urls set is_ready=? where id_user=? and urlname=?", (1, id_user, urlname))
+    base.commit()
+    base.close()
+    
+
+#получение всех данных из таблицы urls
+async def get_full_urls():
+    base = sqlite3.connect("database.db")
+    cur = base.cursor()
+    data = cur.execute("SELECT * FROM urls").fetchall()
+    base.close()
+    return data

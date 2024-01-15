@@ -1,6 +1,6 @@
 import gspread
 import asyncio
-from db import get_url
+from db import get_full_urls
 
 
 gc = gspread.service_account(filename='token.json')
@@ -12,59 +12,29 @@ async def main():
     while True:
         try:
             #получение всех ссылок
-            url_tuples = await get_url()
-            index = 1
+            full_urls = await get_full_urls()
+            #начинаем со 2 строки(1 строка - названия столбиков)
+            index_in_google_table = 2
             #заполнение таблицы
-            for url_tuple in url_tuples:
-                url = url_tuple[0]
-                is_block = "yes" if url_tuple[1]==1 else "no"
-                worksheet.update_cell(index, 1, url)
-                worksheet.update_cell(index, 2, is_block)
-                if is_block=="yes":
-                    worksheet.format(f"A{index}:B{index}", {
-                    "backgroundColor": {
-                        "red": 0.0,
-                        "green": 10.0,
-                        "blue": 0.0
-                    },
-                    "horizontalAlignment": "CENTER",
-                    "textFormat": {
-                        "fontSize": 11,
-                    }
-                    })
-                else:
-                    worksheet.format(f"A{index}:B{index}", {
-                    "backgroundColor": {
-                        "red": 10.0,
-                        "green": 0.0,
-                        "blue": 0.0
-                    },
-                    "horizontalAlignment": "CENTER",
-                    "textFormat": {
-                        "fontSize": 11,
-                    }
-                    })
-                await asyncio.sleep(2.5)
-                index += 1
+            for _ in range(len(full_urls)):
+                urlname, url, count_ready = full_urls[index_in_google_table-2]
+                worksheet.update_cell(index_in_google_table, 1, urlname)
+                worksheet.update_cell(index_in_google_table, 2, url)
+                worksheet.update_cell(index_in_google_table, 3, count_ready)
+                await asyncio.sleep(3.1)
+                index_in_google_table += 1
             #если остались ячейки снизу, заполненный чем-то, то удаляем их
-            val = worksheet.cell(index, 1).value
+            val = worksheet.cell(index_in_google_table, 1).value
+            #пока не пусто
             while val != None:
-                worksheet.update_cell(index, 1, "")
-                worksheet.update_cell(index, 2, "")
-                worksheet.format(f"A{index}:B{index}", {
-                    "backgroundColor": {
-                        "red": 1,
-                        "green": 1,
-                        "blue": 1
-                    },
-                    "horizontalAlignment": "CENTER",
-                    "textFormat": {
-                        "fontSize": 10,
-                    }
-                    })
-                index += 1
-                val = worksheet.cell(index, 1).value
+                worksheet.update_cell(index_in_google_table, 1, "")
+                worksheet.update_cell(index_in_google_table, 2, "")
+                worksheet.update_cell(index_in_google_table, 3, "")
+                index_in_google_table += 1
+                val = worksheet.cell(index_in_google_table, 1).value
+            #уходим в сон, гугл апи много запросов не терпит
             await asyncio.sleep(30)
+        #если превысили лимит в минуту
         except:
             await asyncio.sleep(60)
         
