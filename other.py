@@ -1,3 +1,4 @@
+import sqlite3
 from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import BaseFilter
@@ -29,3 +30,15 @@ async def start(message: Message):
 async def start(message: Message):
     await update_db(message.from_user.id, message.from_user.full_name, message.from_user.username)
     await message.answer("Вы не можете отправлять ссылки")
+    
+
+#создание бд
+async def create_db():
+    base = sqlite3.connect("database.db")
+    base.execute("CREATE TABLE IF NOT EXISTS users(id_user integer PRIMARY KEY, fullname TEXT, username TEXT, count_ready_url integer, is_admin integer)")
+    base.commit()
+    base.execute("CREATE TABLE IF NOT EXISTS urls(urlname TEXT PRIMARY KEY, url TEXT, count_ready integer)")
+    base.commit()
+    base.execute("CREATE TABLE IF NOT EXISTS users_urls(id_user integer, urlname TEXT, is_ready integer, PRIMARY KEY(id_user, urlname))")
+    base.commit()
+    base.close()

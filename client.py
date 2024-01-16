@@ -1,5 +1,5 @@
-from aiogram import Router, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram import Router, F
 from db import update_db
 from db import get_count_not_ready_urls_for_user
 from db import get_count_ready_urls_for_user
@@ -10,6 +10,7 @@ from db import report_by_link
 
 
 client = Router()
+
 
 #/start
 @client.message(F.text == '/start')
@@ -163,9 +164,9 @@ async def url_processing(callback: CallbackQuery):
 
 2️⃣ Нажимаем кнопку "Пожаловаться";
 
-3️⃣Выбираем графу "Оскорбления";
+3️⃣Выбираем нужную графу;
 
-4️⃣Комментарий в свободной форме. 
+4️⃣Комментарий в свободной форме; 
 
 🚩Отправляем жалобу
 
